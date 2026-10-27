@@ -1,0 +1,37 @@
+﻿# Python environments
+.venv/
+.venv_*/
+venv/
+__pycache__/
+*.py[cod]
+
+# Node dependencies and build output
+node_modules/
+dist/
+build/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Generated embeddings and vector databases
+embeddings/
+vector_db/
+document_chunks/
+extracted_documents/
+uploaded_documents/
+
+# Downloaded model weights
+models/
+
+# Editor and operating system files
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Downloaded model weights
+models/
+
+# Sample financial documents - review sharing permissions first
+sample_documents/
