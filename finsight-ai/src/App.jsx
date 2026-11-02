@@ -4,6 +4,7 @@ import DashboardLayout from './layouts/DashboardLayout.jsx'
 import Login from './pages/Login.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import DocumentVerification from './pages/DocumentVerification.jsx'
+import RedFlagAudit from './pages/RedFlagAudit.jsx'
 import DocumentComparison from './pages/DocumentComparison.jsx'
 import AnalysisHistory from './pages/AnalysisHistory.jsx'
 import Reports from './pages/Reports.jsx'
@@ -20,6 +21,7 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/" element={<Protected><DashboardLayout /></Protected>}>
         <Route index element={<Dashboard />} />
+        <Route path="red-flags" element={<RedFlagAudit />} />
         <Route path="verify" element={<DocumentVerification />} />
         <Route path="compare" element={<DocumentComparison />} />
         <Route path="history" element={<AnalysisHistory />} />

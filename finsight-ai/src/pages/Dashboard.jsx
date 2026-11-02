@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Upload, GitCompare, BarChart3, ScanSearch, Layers, Brain, FileSearch } from 'lucide-react'
+import { Upload, GitCompare, BarChart3, ScanSearch, Layers, Brain, FileSearch, AlertOctagon } from 'lucide-react'
 import { useApp } from '../hooks/useApp.jsx'
 import StatCard from '../components/StatCard.jsx'
 import StatusBadge from '../components/StatusBadge.jsx'
@@ -15,7 +15,8 @@ export default function Dashboard() {
     <>
       <div className="head"><div><h1>Welcome back, {user.name}</h1><p className="muted">{today}</p></div>
         <div className="row gap wrap">
-          <Link className="btn pri" to="/verify"><Upload size={16} />Upload Document</Link>
+          <Link className="btn pri" to="/red-flags"><AlertOctagon size={16} />Red Flag Audit</Link>
+          <Link className="btn" to="/verify"><Upload size={16} />Upload Document</Link>
           <Link className="btn" to="/compare"><GitCompare size={16} />Compare Documents</Link>
           <Link className="btn" to="/reports"><BarChart3 size={16} />View Reports</Link>
         </div>

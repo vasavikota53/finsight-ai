@@ -1,9 +1,15 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, ShieldCheck, GitCompare, History, BarChart3, Settings, LifeBuoy, LogOut, Sparkles } from 'lucide-react'
+import { LayoutDashboard, ShieldCheck, GitCompare, History, BarChart3, Settings, LifeBuoy, LogOut, Sparkles, AlertOctagon } from 'lucide-react'
 import { useApp } from '../hooks/useApp.jsx'
 const items = [
-  ['/', 'Overview', LayoutDashboard], ['/verify', 'Document Verification', ShieldCheck], ['/compare', 'Document Comparison', GitCompare],
-  ['/history', 'Analysis History', History], ['/reports', 'Reports & Insights', BarChart3], ['/settings', 'Settings', Settings], ['/help', 'Help & Support', LifeBuoy],
+  ['/', 'Overview', LayoutDashboard],
+  ['/red-flags', 'Red Flag Agent', AlertOctagon],
+  ['/verify', 'Document Verification', ShieldCheck],
+  ['/compare', 'Document Comparison', GitCompare],
+  ['/history', 'Analysis History', History],
+  ['/reports', 'Reports & Insights', BarChart3],
+  ['/settings', 'Settings', Settings],
+  ['/help', 'Help & Support', LifeBuoy],
 ]
 export default function Sidebar({ collapsed, mobileOpen, close }) {
   const { logout, toast } = useApp(), nav = useNavigate()

@@ -66,6 +66,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from red_flag_agent.router import router as red_flag_router
+app.include_router(red_flag_router)
+
 
 class SearchRequest(BaseModel):
     question: str = Field(min_length=1, max_length=1000)
