@@ -420,26 +420,44 @@ export default function RedFlagAudit() {
                       </span>
                     </div>
 
-                    <div className="muted sm" style={{ marginTop: '4px' }}>
-                      Category: {flag.category} {flag.threshold_breached && `· Threshold: ${flag.threshold_breached}`}
+                    <div style={{ marginTop: '6px', display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.75rem', background: 'rgba(99,102,241,0.12)', color: '#818cf8', padding: '2px 8px', borderRadius: '4px' }}>
+                        {flag.category}
+                      </span>
+                      {flag.threshold_breached && (
+                        <span style={{ fontSize: '0.75rem', background: 'rgba(251,191,36,0.12)', color: '#fbbf24', padding: '2px 8px', borderRadius: '4px' }}>
+                          Threshold: {flag.threshold_breached}
+                        </span>
+                      )}
                     </div>
 
-                    <p style={{ marginTop: '8px' }}>{flag.description}</p>
+                    <p style={{ marginTop: '8px', fontSize: '0.9rem', lineHeight: '1.5' }}>{flag.description}</p>
 
                     {flag.evidence && (
                       <div
                         style={{
-                          background: 'rgba(255,255,255,0.03)',
+                          background: 'rgba(255,255,255,0.04)',
                           border: '1px solid var(--bd)',
                           borderRadius: '8px',
-                          padding: '8px 12px',
-                          fontSize: '0.82rem',
-                          fontFamily: 'monospace',
-                          marginTop: '8px',
-                          wordBreak: 'break-word',
+                          padding: '12px 14px',
+                          marginTop: '10px',
                         }}
                       >
-                        <strong>Citation / Calculation:</strong> {flag.evidence}
+                        <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#94a3b8', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          📌 Source Evidence
+                        </div>
+                        {flag.evidence.split('\n').filter(l => l.trim()).map((line, li) => (
+                          <p key={li} style={{
+                            fontSize: '0.84rem',
+                            lineHeight: '1.55',
+                            color: '#cbd5e1',
+                            margin: '0 0 4px 0',
+                            paddingLeft: '10px',
+                            borderLeft: '2px solid #334155',
+                          }}>
+                            {line.replace(/^\.\.\./, '').replace(/\.\.\.$/, '').trim()}
+                          </p>
+                        ))}
                       </div>
                     )}
 
