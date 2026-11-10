@@ -1,5 +1,7 @@
 
-
+import tempfile
+from fastapi.responses import FileResponse
+from report_agent.orchestrator import FinancialResearchOrchestrator
 from contextlib import asynccontextmanager
 from pathlib import Path
 import sys
@@ -25,6 +27,7 @@ COLLECTION_NAME = "finsight_documents"
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 
 engine = {}
+report_orchestrator = FinancialResearchOrchestrator()
 
 
 @asynccontextmanager
@@ -244,3 +247,59 @@ def search(request: SearchRequest):
             status_code=500,
             detail=f"Search failed: {exc}",
         ) from exc
+
+@app.post("/api/reports/generate")
+async def generate_financial_report(
+    file: UploadFile = File(...),
+    company_name: str | None = None
+):
+    if not file.filename or Path(file.filename).suffix.lower() != ".pdf":
+        raise HTTPException(
+            status_code=400,
+            detail="Please upload a PDF file."
+        )
+
+    contents = await file.read()
+
+    if not contents.startswith(b"%PDF-"):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid PDF file."
+        )
+
+    if len(contents) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail="PDF must be smaller than 20 MB."
+        )
+
+    temporary_path = None
+
+    try:
+        with tempfile.NamedTemporaryFile(
+            suffix=".pdf",
+            delete=False
+        ) as temporary_file:
+            temporary_file.write(contents)
+            temporary_path = Path(temporary_file.name)
+
+        result = report_orchestrator.analyze_document(
+            pdf_path=temporary_path,
+            company_name=company_name
+        )
+
+        return FileResponse(
+            path=result["pdf_path"],
+            media_type="application/pdf",
+            filename=f"{Path(file.filename).stem}_financial_report.pdf"
+        )
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Report generation failed: {exc}"
+        ) from exc
+
+    finally:
+        if temporary_path:
+            temporary_path.unlink(missing_ok=True)
