@@ -8,11 +8,11 @@
 
 import axios from 'axios'
 
-// ─── Configuration ───────────────────────────────────────────
+// â”€â”€â”€ Configuration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 const TIMEOUT  = Number(import.meta.env.VITE_API_TIMEOUT || 30000)
 
-// ─── Axios Instance ──────────────────────────────────────────
+// â”€â”€â”€ Axios Instance â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const apiClient = axios.create({
   baseURL: BASE_URL,
   timeout: TIMEOUT,
@@ -22,7 +22,7 @@ const apiClient = axios.create({
   },
 })
 
-// ─── Request Interceptor ─────────────────────────────────────
+// â”€â”€â”€ Request Interceptor â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 apiClient.interceptors.request.use(
   (config) => {
     // Attach auth token when available (future: JWT from auth store)
@@ -33,7 +33,7 @@ apiClient.interceptors.request.use(
   (error) => Promise.reject(error)
 )
 
-// ─── Response Interceptor ────────────────────────────────────
+// â”€â”€â”€ Response Interceptor â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -51,10 +51,10 @@ apiClient.interceptors.response.use(
   }
 )
 
-// ─── API Endpoint Constants ───────────────────────────────────
+// â”€â”€â”€ API Endpoint Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const ENDPOINTS = {
   // Research
-  QUERY:    '/api/research/query',
+  QUERY:    '/api/search',
   SESSIONS: '/api/research/sessions',
   SESSION:  (id) => `/api/research/sessions/${id}`,
 

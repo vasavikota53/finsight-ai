@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react'
+
+import React, { useState } from 'react'
 import Sidebar from '../components/Sidebar.jsx'
 import ChatWindow from '../components/ChatWindow.jsx'
 import SourcePanel from '../components/SourcePanel.jsx'
@@ -31,15 +32,31 @@ export default function ResearchWorkspace({ theme, onToggleTheme }) {
     removeSession,
   } = useResearchChat()
 
-  // Mobile: auto-close doc panel on send
+  // Safely determine the current session title.
+  // Prevents React from rendering an object inside <p>.
+  const activeSession = Array.isArray(sessions)
+    ? sessions.find((session) => session.id === activeSessionId)
+    : null
+
+  const sessionName = activeSession?.name
+
+  const activeSessionTitle =
+    typeof sessionName === 'string' && sessionName.trim()
+      ? sessionName
+      : 'Financial Research'
+
+  // Mobile: auto-close document panel on send.
   function handleSend(question) {
-    if (window.innerWidth < 768) setShowDocuments(false)
+    if (window.innerWidth < 768) {
+      setShowDocuments(false)
+    }
+
     sendQuestion(question)
   }
 
   return (
     <div className="flex h-screen overflow-hidden">
-      {/* ── Sidebar ──────────────────────────────────── */}
+      {/* Sidebar */}
       <Sidebar
         sessions={sessions}
         activeSessionId={activeSessionId}
@@ -50,35 +67,50 @@ export default function ResearchWorkspace({ theme, onToggleTheme }) {
         theme={theme}
         onToggleTheme={onToggleTheme}
         documentCount={selectedDocIds.length}
-        onToggleDocuments={() => setShowDocuments((v) => !v)}
+        onToggleDocuments={() =>
+          setShowDocuments((previous) => !previous)
+        }
       />
 
-      {/* ── Main content ─────────────────────────────── */}
+      {/* Main content */}
       <div className="flex flex-1 overflow-hidden">
         {/* Document selector panel */}
         {showDocuments && (
           <div
             className="w-72 flex-shrink-0 flex flex-col border-r h-full"
             style={{
-              background:  'var(--bg-secondary)',
+              background: 'var(--bg-secondary)',
               borderColor: 'var(--border-color)',
             }}
           >
             {/* Panel header */}
             <div
               className="flex items-center gap-2 px-3 py-3 border-b flex-shrink-0"
-              style={{ borderColor: 'var(--border-color)' }}
+              style={{
+                borderColor: 'var(--border-color)',
+              }}
             >
-              <FileText size={15} style={{ color: 'var(--accent)' }} />
-              <span className="text-sm font-semibold flex-1" style={{ color: 'var(--text-primary)' }}>
+              <FileText
+                size={15}
+                style={{ color: 'var(--accent)' }}
+              />
+
+              <span
+                className="text-sm font-semibold flex-1"
+                style={{ color: 'var(--text-primary)' }}
+              >
                 Documents
               </span>
+
               <button
                 onClick={() => setShowDocuments(false)}
                 className="p-1 rounded hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
                 aria-label="Close document panel"
               >
-                <X size={14} style={{ color: 'var(--text-muted)' }} />
+                <X
+                  size={14}
+                  style={{ color: 'var(--text-muted)' }}
+                />
               </button>
             </div>
 
@@ -97,34 +129,60 @@ export default function ResearchWorkspace({ theme, onToggleTheme }) {
           <div
             className="flex items-center gap-3 px-4 h-14 border-b flex-shrink-0"
             style={{
-              background:  'var(--bg-secondary)',
+              background: 'var(--bg-secondary)',
               borderColor: 'var(--border-color)',
             }}
           >
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
-                {sessions.find((s) => s.id === activeSessionId)?.name ?? 'Financial Research'}
+              <p
+                className="text-sm font-semibold truncate"
+                style={{ color: 'var(--text-primary)' }}
+              >
+                {activeSessionTitle}
               </p>
+
               {selectedDocIds.length > 0 && (
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                  {selectedDocIds.length} document{selectedDocIds.length !== 1 ? 's' : ''} selected
+                <p
+                  className="text-xs"
+                  style={{ color: 'var(--text-muted)' }}
+                >
+                  {selectedDocIds.length} document
+                  {selectedDocIds.length !== 1 ? 's' : ''} selected
                 </p>
               )}
             </div>
+
+            {/* Toggle documents panel */}
             <button
-              onClick={() => setShowDocuments((v) => !v)}
+              onClick={() =>
+                setShowDocuments((previous) => !previous)
+              }
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                showDocuments ? 'bg-blue-500/15 text-blue-500' : ''
+                showDocuments
+                  ? 'bg-blue-500/15 text-blue-500'
+                  : ''
               }`}
-              style={!showDocuments ? { color: 'var(--text-secondary)', background: 'var(--bg-tertiary)' } : {}}
+              style={
+                !showDocuments
+                  ? {
+                      color: 'var(--text-secondary)',
+                      background: 'var(--bg-tertiary)',
+                    }
+                  : {}
+              }
               aria-label="Toggle documents panel"
             >
               <PanelRight size={13} />
+
               Docs
+
               {selectedDocIds.length > 0 && (
                 <span
                   className="ml-1 px-1.5 py-0.5 rounded-full text-xs font-bold"
-                  style={{ background: 'var(--accent)', color: '#fff' }}
+                  style={{
+                    background: 'var(--accent)',
+                    color: '#fff',
+                  }}
                 >
                   {selectedDocIds.length}
                 </span>
@@ -142,8 +200,13 @@ export default function ResearchWorkspace({ theme, onToggleTheme }) {
               isDemoMode={isDemoMode}
               onSend={handleSend}
               onRetry={() => {
-                const lastUser = [...messages].reverse().find((m) => m.role === 'user')
-                if (lastUser) sendQuestion(lastUser.content)
+                const lastUser = [...messages]
+                  .reverse()
+                  .find((message) => message.role === 'user')
+
+                if (lastUser) {
+                  sendQuestion(lastUser.content)
+                }
               }}
               onCitationClick={setSourcePanelCitation}
             />
@@ -151,7 +214,7 @@ export default function ResearchWorkspace({ theme, onToggleTheme }) {
         </div>
       </div>
 
-      {/* Source panel (slide-in) */}
+      {/* Source panel */}
       {sourcePanelCitation && (
         <SourcePanel
           citation={sourcePanelCitation}

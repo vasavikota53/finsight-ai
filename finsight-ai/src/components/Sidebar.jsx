@@ -1,9 +1,10 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, ShieldCheck, GitCompare, History, BarChart3, Settings, LifeBuoy, LogOut, Sparkles, AlertOctagon, FileSearch } from 'lucide-react'
+import { LayoutDashboard, ShieldCheck, GitCompare, History, BarChart3, Settings, LifeBuoy, LogOut, Sparkles, AlertOctagon, FileSearch, MessageSquare } from 'lucide-react'
 import { useApp } from '../hooks/useApp.jsx'
 const items = [
   ['/', 'Overview', LayoutDashboard],
   ['/red-flags', 'Red Flag Agent', AlertOctagon],
+  ['/research', 'Conversational Research', MessageSquare],
   ['/extract', 'Financial Extraction', FileSearch],
   ['/verify', 'Document Verification', ShieldCheck],
   ['/compare', 'Document Comparison', GitCompare],

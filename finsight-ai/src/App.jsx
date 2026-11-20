@@ -11,6 +11,7 @@ import Reports from './pages/Reports.jsx'
 import FinancialExtraction from './pages/FinancialExtraction.jsx'
 import Settings from './pages/Settings.jsx'
 import HelpSupport from './pages/HelpSupport.jsx'
+import ConversationalResearch from './pages/ConversationalResearch.jsx'
 
 function Protected({ children }) {
   const { user } = useApp()
@@ -30,6 +31,7 @@ export default function App() {
         <Route path="extract" element={<FinancialExtraction />} />
         <Route path="settings" element={<Settings />} />
         <Route path="help" element={<HelpSupport />} />
+        <Route path="research" element={<ConversationalResearch />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -1,25 +1,84 @@
+
 /**
  * useResearchChat.js
  * Core hook managing chat state, session persistence, and API calls.
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { postQuery, getSessions, createSession, deleteSession, isDemoMode } from '../services/researchService.js'
+import {
+  postQuery,
+  getSessions,
+  createSession,
+  deleteSession,
+  isDemoMode,
+} from '../services/researchService.js'
 
 const STORAGE_KEY = 'finresearch_sessions'
 
 // ─── Helpers ─────────────────────────────────────────────────
+
 function newMessageId() {
   return `msg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
 }
+
 function newSessionId() {
   return `session-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+}
+
+// Always store a valid string as the session name.
+// This prevents React click events or objects from becoming
+// "[object Object]" in the sidebar.
+function normalizeSessionName(value) {
+  if (typeof value === 'string') {
+    const name = value.trim()
+
+    if (name && name !== '[object Object]') {
+      return name
+    }
+  }
+
+  return 'New Research'
+}
+
+function normalizeSession(session) {
+  if (!session || typeof session !== 'object') {
+    return null
+  }
+
+  if (!session.id) {
+    return null
+  }
+
+  return {
+    ...session,
+    name: normalizeSessionName(session.name),
+    messages: Array.isArray(session.messages)
+      ? session.messages
+      : [],
+    preview:
+      typeof session.preview === 'string'
+        ? session.preview
+        : '',
+  }
 }
 
 function loadPersistedSessions() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? JSON.parse(raw) : []
+
+    if (!raw) {
+      return []
+    }
+
+    const parsed = JSON.parse(raw)
+
+    if (!Array.isArray(parsed)) {
+      return []
+    }
+
+    return parsed
+      .map(normalizeSession)
+      .filter(Boolean)
   } catch {
     return []
   }
@@ -27,213 +86,436 @@ function loadPersistedSessions() {
 
 function persistSessions(sessions) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions))
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(sessions)
+    )
   } catch {
-    /* storage quota exceeded — ignore */
+    // Storage unavailable or quota exceeded.
   }
 }
 
-// ─────────────────────────────────────────────────────────────
+// ─── Main Hook ───────────────────────────────────────────────
+
 export function useResearchChat() {
-  const [sessions, setSessions]               = useState([])
+  const [sessions, setSessions] = useState([])
   const [activeSessionId, setActiveSessionId] = useState(null)
-  const [messages, setMessages]               = useState([])
-  const [isLoading, setIsLoading]             = useState(false)
-  const [error, setError]                     = useState(null)
-  const [selectedDocIds, setSelectedDocIds]   = useState([])
-  const [activeAgent, setActiveAgent]         = useState(null)
-  const [sourcePanelCitation, setSourcePanelCitation] = useState(null)
+  const [messages, setMessages] = useState([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState(null)
+
+  const [selectedDocIds, setSelectedDocIds] = useState([])
+  const [activeAgent, setActiveAgent] = useState(null)
+
+  const [
+    sourcePanelCitation,
+    setSourcePanelCitation,
+  ] = useState(null)
+
   const abortRef = useRef(null)
 
-  // ── Load sessions on mount ────────────────────────────────
+  // Prevent outdated responses from overwriting
+  // a different session's visible messages.
+  const activeSessionIdRef = useRef(null)
+
   useEffect(() => {
+    activeSessionIdRef.current = activeSessionId
+  }, [activeSessionId])
+
+  // ─── Load sessions on mount ──────────────────────────────
+
+  useEffect(() => {
+    let cancelled = false
+
     async function init() {
       if (isDemoMode()) {
         const persisted = loadPersistedSessions()
+
+        if (cancelled) return
+
+        setSessions(persisted)
+
         if (persisted.length > 0) {
-          setSessions(persisted)
           setActiveSessionId(persisted[0].id)
-          setMessages(persisted[0].messages || [])
+          activeSessionIdRef.current = persisted[0].id
+          setMessages(persisted[0].messages)
         }
+
         return
       }
+
       try {
         const serverSessions = await getSessions()
-        setSessions(serverSessions)
-        if (serverSessions.length > 0) {
-          setActiveSessionId(serverSessions[0].id)
+
+        if (cancelled) return
+
+        const normalized = Array.isArray(serverSessions)
+          ? serverSessions
+              .map(normalizeSession)
+              .filter(Boolean)
+          : []
+
+        setSessions(normalized)
+
+        if (normalized.length > 0) {
+          setActiveSessionId(normalized[0].id)
+          activeSessionIdRef.current = normalized[0].id
+          setMessages(normalized[0].messages)
         }
-      } catch {
-        // Backend not available; silently start empty
+      } catch (err) {
+        if (!cancelled) {
+          console.error(
+            'Failed to load research sessions:',
+            err
+          )
+        }
       }
     }
+
     init()
+
+    return () => {
+      cancelled = true
+    }
   }, [])
 
-  // ── Persist sessions to localStorage ─────────────────────
+  // ─── Persist sessions locally ────────────────────────────
+
   useEffect(() => {
     if (isDemoMode() && sessions.length > 0) {
       persistSessions(sessions)
     }
   }, [sessions])
 
-  // ── Computed: active session object ──────────────────────
-  const activeSession = sessions.find((s) => s.id === activeSessionId) ?? null
+  // ─── Active session ──────────────────────────────────────
 
-  // ── Start a new session ──────────────────────────────────
-  const startNewSession = useCallback(async (name = 'New Research') => {
-    try {
-      let session
-      if (isDemoMode()) {
-        session = {
-          id:         newSessionId(),
-          name,
-          created_at: new Date().toISOString(),
-          preview:    '',
-          messages:   [],
+  const activeSession =
+    sessions.find((s) => s.id === activeSessionId) ?? null
+
+  // ─── Start new research session ──────────────────────────
+
+  const startNewSession = useCallback(
+    async (requestedName = 'New Research') => {
+      const name = normalizeSessionName(requestedName)
+
+      try {
+        let session
+
+        if (isDemoMode()) {
+          session = {
+            id: newSessionId(),
+            name,
+            created_at: new Date().toISOString(),
+            preview: '',
+            messages: [],
+          }
+        } else {
+          const response = await createSession(name)
+
+          session = normalizeSession({
+            ...response,
+            name: response?.name ?? name,
+            messages: [],
+          })
+
+          if (!session) {
+            throw new Error(
+              'The server returned an invalid session.'
+            )
+          }
         }
-      } else {
-        session = await createSession(name)
-        session.messages = []
+
+        activeSessionIdRef.current = session.id
+
+        setSessions((prev) => [session, ...prev])
+        setActiveSessionId(session.id)
+        setMessages([])
+        setError(null)
+        setActiveAgent(null)
+        setSourcePanelCitation(null)
+
+        return session
+      } catch (err) {
+        setError(
+          err.message || 'Unable to create research session.'
+        )
+
+        return null
       }
-      setSessions((prev) => [session, ...prev])
-      setActiveSessionId(session.id)
-      setMessages([])
+    },
+    []
+  )
+
+  // ─── Switch session ──────────────────────────────────────
+
+  const switchSession = useCallback(
+    (sessionId) => {
+      const session = sessions.find(
+        (s) => s.id === sessionId
+      )
+
+      if (!session) return
+
+      activeSessionIdRef.current = sessionId
+
+      setActiveSessionId(sessionId)
+      setMessages(session.messages || [])
       setError(null)
       setActiveAgent(null)
-      return session
-    } catch (err) {
-      setError(err.message)
-    }
-  }, [])
+      setSourcePanelCitation(null)
+    },
+    [sessions]
+  )
 
-  // ── Switch to an existing session ────────────────────────
-  const switchSession = useCallback((sessionId) => {
-    const session = sessions.find((s) => s.id === sessionId)
-    if (!session) return
-    setActiveSessionId(sessionId)
-    setMessages(session.messages || [])
-    setError(null)
-    setActiveAgent(null)
-  }, [sessions])
+  // ─── Remove session ──────────────────────────────────────
 
-  // ── Remove a session ─────────────────────────────────────
-  const removeSession = useCallback(async (sessionId) => {
-    if (!isDemoMode()) {
-      try { await deleteSession(sessionId) } catch { /* ignore */ }
-    }
-    setSessions((prev) => prev.filter((s) => s.id !== sessionId))
-    if (activeSessionId === sessionId) {
-      const remaining = sessions.filter((s) => s.id !== sessionId)
-      if (remaining.length > 0) {
-        setActiveSessionId(remaining[0].id)
-        setMessages(remaining[0].messages || [])
-      } else {
-        setActiveSessionId(null)
-        setMessages([])
-      }
-    }
-  }, [activeSessionId, sessions])
-
-  // ── Update messages in session store ─────────────────────
-  const updateSessionMessages = useCallback((sessionId, msgs) => {
-    setSessions((prev) =>
-      prev.map((s) => {
-        if (s.id !== sessionId) return s
-        const preview = msgs.find((m) => m.role === 'user')?.content?.slice(0, 80) ?? s.preview
-        return { ...s, messages: msgs, preview }
-      })
-    )
-  }, [])
-
-  // ── Send a question ──────────────────────────────────────
-  const sendQuestion = useCallback(async (question) => {
-    if (!question.trim() || isLoading) return
-
-    // Ensure a session exists
-    let sessionId = activeSessionId
-    let currentMessages = messages
-
-    if (!sessionId) {
-      const session = await startNewSession(question.slice(0, 60))
-      if (!session) return
-      sessionId = session.id
-      currentMessages = []
-    }
-
-    setError(null)
-    setActiveAgent(null)
-
-    // Append user message
-    const userMsg = {
-      id:         newMessageId(),
-      role:       'user',
-      content:    question,
-      timestamp:  new Date().toISOString(),
-    }
-    const newMessages = [...currentMessages, userMsg]
-    setMessages(newMessages)
-    updateSessionMessages(sessionId, newMessages)
-    setIsLoading(true)
-
-    try {
-      const response = await postQuery(sessionId, question, selectedDocIds)
-      setActiveAgent(response.agent)
-
-      const aiMsg = {
-        id:         newMessageId(),
-        role:       'assistant',
-        content:    response.answer,
-        agent:      response.agent,
-        citations:  response.citations ?? [],
-        comparison: response.comparison ?? null,
-        timestamp:  new Date().toISOString(),
-        error:      false,
+  const removeSession = useCallback(
+    async (sessionId) => {
+      if (!isDemoMode()) {
+        try {
+          await deleteSession(sessionId)
+        } catch (err) {
+          setError(
+            err.message || 'Unable to delete session.'
+          )
+          return
+        }
       }
 
-      const finalMessages = [...newMessages, aiMsg]
-      setMessages(finalMessages)
-      updateSessionMessages(sessionId, finalMessages)
-    } catch (err) {
-      const errMsg = {
-        id:        newMessageId(),
-        role:      'assistant',
-        content:   err.message || 'An unexpected error occurred.',
-        agent:     null,
-        citations: [],
-        comparison:null,
+      const remaining = sessions.filter(
+        (s) => s.id !== sessionId
+      )
+
+      setSessions(remaining)
+
+      if (activeSessionIdRef.current === sessionId) {
+        const nextSession = remaining[0] || null
+
+        activeSessionIdRef.current =
+          nextSession?.id ?? null
+
+        setActiveSessionId(nextSession?.id ?? null)
+        setMessages(nextSession?.messages || [])
+        setActiveAgent(null)
+        setSourcePanelCitation(null)
+      }
+
+      // Remove the deleted session from persisted storage,
+      // including when it was the final remaining session.
+      if (isDemoMode()) {
+        persistSessions(remaining)
+      }
+    },
+    [sessions]
+  )
+
+  // ─── Update session messages ─────────────────────────────
+
+  const updateSessionMessages = useCallback(
+    (sessionId, msgs) => {
+      setSessions((prev) =>
+        prev.map((session) => {
+          if (session.id !== sessionId) {
+            return session
+          }
+
+          const firstUserMessage = msgs.find(
+            (msg) => msg.role === 'user'
+          )
+
+          const preview =
+            typeof firstUserMessage?.content === 'string'
+              ? firstUserMessage.content.slice(0, 80)
+              : session.preview
+
+          return {
+            ...session,
+            messages: msgs,
+            preview,
+          }
+        })
+      )
+    },
+    []
+  )
+
+  // ─── Send research question ──────────────────────────────
+
+  const sendQuestion = useCallback(
+    async (question) => {
+      if (
+        typeof question !== 'string' ||
+        !question.trim() ||
+        isLoading
+      ) {
+        return
+      }
+
+      const cleanQuestion = question.trim()
+
+      let sessionId = activeSessionIdRef.current
+      let currentMessages = messages
+
+      // Automatically create a session when the user
+      // sends a question without selecting one.
+      if (!sessionId) {
+        const session = await startNewSession(
+          cleanQuestion.slice(0, 60)
+        )
+
+        if (!session) return
+
+        sessionId = session.id
+        currentMessages = []
+      }
+
+      setError(null)
+      setActiveAgent(null)
+
+      const userMsg = {
+        id: newMessageId(),
+        role: 'user',
+        content: cleanQuestion,
         timestamp: new Date().toISOString(),
-        error:     true,
       }
-      const failedMessages = [...newMessages, errMsg]
-      setMessages(failedMessages)
-      updateSessionMessages(sessionId, failedMessages)
-      setError(err.message)
-    } finally {
-      setIsLoading(false)
-    }
-  }, [activeSessionId, messages, isLoading, selectedDocIds, startNewSession, updateSessionMessages])
 
-  // ── Retry last failed message ─────────────────────────────
+      const newMessages = [
+        ...currentMessages,
+        userMsg,
+      ]
+
+      if (activeSessionIdRef.current === sessionId) {
+        setMessages(newMessages)
+      }
+
+      updateSessionMessages(sessionId, newMessages)
+      setIsLoading(true)
+
+      try {
+        // postQuery handles both:
+        // 1. Live backend responses when VITE_LIVE_CHAT=true
+        // 2. Demo responses when live chat is disabled.
+        const response = await postQuery(
+          sessionId,
+          cleanQuestion,
+          selectedDocIds
+        )
+
+        const aiMsg = {
+          id: newMessageId(),
+          role: 'assistant',
+          content:
+            typeof response.answer === 'string'
+              ? response.answer
+              : 'No answer was returned.',
+          agent: response.agent ?? 'research',
+          citations: Array.isArray(response.citations)
+            ? response.citations
+            : [],
+          comparison: response.comparison ?? null,
+          timestamp: new Date().toISOString(),
+          error: false,
+        }
+
+        const finalMessages = [
+          ...newMessages,
+          aiMsg,
+        ]
+
+        updateSessionMessages(sessionId, finalMessages)
+
+        // Only update the visible chat if the user
+        // is still viewing the same session.
+        if (activeSessionIdRef.current === sessionId) {
+          setMessages(finalMessages)
+          setActiveAgent(aiMsg.agent)
+        }
+      } catch (err) {
+        const errorMessage =
+          err.message || 'An unexpected error occurred.'
+
+        const errMsg = {
+          id: newMessageId(),
+          role: 'assistant',
+          content: errorMessage,
+          agent: null,
+          citations: [],
+          comparison: null,
+          timestamp: new Date().toISOString(),
+          error: true,
+        }
+
+        const failedMessages = [
+          ...newMessages,
+          errMsg,
+        ]
+
+        updateSessionMessages(sessionId, failedMessages)
+
+        if (activeSessionIdRef.current === sessionId) {
+          setMessages(failedMessages)
+          setError(errorMessage)
+        }
+      } finally {
+        setIsLoading(false)
+      }
+    },
+    [
+      messages,
+      isLoading,
+      selectedDocIds,
+      startNewSession,
+      updateSessionMessages,
+    ]
+  )
+
+  // ─── Retry last failed question ─────────────────────────
+
   const retryLast = useCallback(() => {
-    // Find the last user message
-    const lastUser = [...messages].reverse().find((m) => m.role === 'user')
-    if (!lastUser) return
-    // Remove the last (failed) AI message
-    const trimmed = messages.filter((m, i) => !(i === messages.length - 1 && m.error))
-    setMessages(trimmed)
-    sendQuestion(lastUser.content)
-  }, [messages, sendQuestion])
+    const lastUser = [...messages]
+      .reverse()
+      .find((msg) => msg.role === 'user')
 
-  // ── Copy message content ──────────────────────────────────
+    if (!lastUser) return
+
+    const trimmed = messages.filter(
+      (msg, index) =>
+        !(
+          index === messages.length - 1 &&
+          msg.error
+        )
+    )
+
+    setMessages(trimmed)
+
+    if (activeSessionIdRef.current) {
+      updateSessionMessages(
+        activeSessionIdRef.current,
+        trimmed
+      )
+    }
+
+    sendQuestion(lastUser.content)
+  }, [
+    messages,
+    sendQuestion,
+    updateSessionMessages,
+  ])
+
+  // ─── Copy message content ───────────────────────────────
+
   const copyMessage = useCallback(async (content) => {
     try {
-      await navigator.clipboard.writeText(content)
+      await navigator.clipboard.writeText(
+        String(content ?? '')
+      )
       return true
     } catch {
       return false
     }
   }, [])
+
+  // ─── Public hook interface ───────────────────────────────
 
   return {
     sessions,
@@ -245,14 +527,17 @@ export function useResearchChat() {
     activeAgent,
     selectedDocIds,
     sourcePanelCitation,
+
     setSelectedDocIds,
     setSourcePanelCitation,
+
     sendQuestion,
     startNewSession,
     switchSession,
     removeSession,
     retryLast,
     copyMessage,
+
     isDemoMode: isDemoMode(),
   }
 }
