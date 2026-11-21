@@ -1,4 +1,5 @@
-﻿import tempfile
+﻿import os
+import tempfile
 from fastapi.responses import FileResponse
 from report_agent.orchestrator import FinancialResearchOrchestrator
 from contextlib import asynccontextmanager
@@ -6,9 +7,12 @@ from pathlib import Path
 import sys
 import uuid
 
+from google import genai
+
 import chromadb
 import numpy as np
 from extraction_agent.extractor import extract_financial_information
+from research_agent import ResearchAgent
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -81,6 +85,10 @@ class SearchRequest(BaseModel):
 
 class ExtractionRequest(BaseModel):
     company: str = Field(min_length=1, max_length=100)
+
+class ResearchRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=2000)
+    company: str | None = Field(default=None, max_length=100)
 
 
 def embed_query(question):
@@ -251,6 +259,40 @@ def search(request: SearchRequest):
         raise HTTPException(
             status_code=500,
             detail=f"Search failed: {exc}",
+        ) from exc
+
+
+@app.post("/api/research/query")
+def research_query(request: ResearchRequest):
+    """Answer a financial question using retrieved, cited document evidence."""
+    question = request.question.strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="Please enter a research question.")
+
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="GEMINI_API_KEY is not configured. Add it to the project-root .env file.",
+        )
+    if "collection" not in engine or "session" not in engine:
+        raise HTTPException(status_code=503, detail="The document search engine is not ready.")
+
+    try:
+        client = genai.Client(api_key=api_key)
+        agent = ResearchAgent(
+            collection=engine["collection"],
+            embed_query=embed_query,
+            client=client,
+            model_name=os.getenv("GEMINI_MODEL", "gemini-3.5-flash"),
+        )
+        return agent.answer(question=question, company=request.company)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Research Agent failed: {exc}",
         ) from exc
 
 @app.post("/api/reports/generate")
